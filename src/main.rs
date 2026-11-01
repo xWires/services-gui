@@ -30,7 +30,10 @@ enum Message {
     UnitStarted(Result<(), zbus::Error>),
 
     StopUnit(String),
-    UnitStopped(Result<(), zbus::Error>)
+    UnitStopped(Result<(), zbus::Error>),
+
+    RestartUnit(String),
+    UnitRestarted(Result<(), zbus::Error>)
 }
 
 struct State {
@@ -90,7 +93,17 @@ impl App {
             Message::UnitStopped(Err(e)) => {
                 eprintln!("Failed to stop unit: {:?}", e);
                 Task::none()
-            }
+            },
+
+            Message::RestartUnit(name) => match self.proxy.clone() {
+                Some(proxy) => Task::perform(restart_unit(proxy, name), Message::UnitRestarted),
+                None => Task::none(),
+            },
+            Message::UnitRestarted(Ok(_)) => self.update(Message::RefreshUnits),
+            Message::UnitRestarted(Err(e)) => {
+                eprintln!("Failed to restarted unit: {:?}", e);
+                Task::none()
+            },
         }
     }
 
@@ -108,16 +121,19 @@ impl App {
                     table::column(text("Name"), |row: Unit| ContextMenu::new(text(row.name.clone()), move || {
                         let mut start = button("Start");
                         let mut stop = button("Stop");
+                        let mut restart = button("Restart");
 
                         if row.active_state != "active".to_string() {
                             start = start.on_press(Message::StartUnit(row.name.clone()));
                         } else {
                             stop = stop.on_press(Message::StopUnit(row.name.clone()));
+                            restart = restart.on_press(Message::RestartUnit(row.name.clone()));
                         }
 
                         column![
                             start,
-                            stop
+                            stop,
+                            restart
                         ].into()
                     })),
                     table::column(text("Description"), |row: Unit| text(row.description)),
@@ -170,6 +186,11 @@ async fn start_unit(proxy: ManagerProxy<'_>, name: String) -> Result<(), zbus::E
 
 async fn stop_unit(proxy: ManagerProxy<'_>, name: String) -> Result<(), zbus::Error> {
     proxy.stop_unit(name, "replace".to_string()).await?;
+    Ok(())
+}
+
+async fn restart_unit(proxy: ManagerProxy<'_>, name: String) -> Result<(), zbus::Error> {
+    proxy.restart_unit(name, "replace".to_string()).await?;
     Ok(())
 }
 

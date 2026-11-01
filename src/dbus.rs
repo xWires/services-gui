@@ -39,4 +39,7 @@ pub trait Manager {
 
     #[zbus(allow_interactive_auth)]
     async fn stop_unit(&self, name: String, mode: String) -> zbus::Result<OwnedObjectPath>;
+
+    #[zbus(allow_interactive_auth)]
+    async fn restart_unit(&self, name: String, mode: String) -> zbus::Result<OwnedObjectPath>;
 }
